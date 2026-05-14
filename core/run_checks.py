@@ -20,13 +20,16 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.reporters.scorecard import build_scorecard, render_text, save_scorecard, send_escalation_email
+from core.reporters.ai_usage_log import append_entry as log_ai_usage
+from core.scanners.ai_attribution_scanner import build_report as build_attribution, render_text as render_attribution
 from core.scanners.dependency_scanner import scan as dep_scan
 from core.scanners.phi_detector import scan_paths as phi_scan
 from core.scanners.sast_runner import run_full_scan as sast_scan
 from core.validators.config_validator import ConfigValidationError, load_and_validate
 
 
-def run(stage: str, paths: list, config_path: str, pr_number: str = None, build_ref: str = ""):
+def run(stage: str, paths: list, config_path: str, pr_number: str = None,
+        build_ref: str = "", pr_body: str = "", base_branch: str = "main"):
     # ── Load and validate config ──────────────────────────────────────────
     try:
         cfg = load_and_validate(config_path)
@@ -95,6 +98,27 @@ def run(stage: str, paths: list, config_path: str, pr_number: str = None, build_
         sast_findings = sast_scan(paths, include_owasp=True)
         phi_findings = phi_scan(paths, cfg.phi_patterns.custom_identifiers, cfg.phi_patterns.exclude_paths)
         dep_findings = dep_scan(project_root, cfg.team.tech_stack)
+
+    # ── AI Attribution (PR and pipeline stages) ──────────────────────────
+    attribution_report = None
+    if stage in ("pr", "pipeline"):
+        print("Running AI attribution scan...")
+        try:
+            attribution_report = build_attribution(
+                base_branch=base_branch,
+                pr_number=pr_number,
+                pr_body=pr_body,
+            )
+            print(render_attribution(attribution_report))
+            log_ai_usage(
+                report=attribution_report,
+                team_name=cfg.team.name,
+                platform=cfg.team.platform,
+                build_ref=build_ref,
+                stage=stage,
+            )
+        except Exception as e:
+            print(f"  WARNING: AI attribution scan failed (non-blocking): {e}")
 
     # ── Build and output scorecard ────────────────────────────────────────
     card = build_scorecard(
@@ -179,7 +203,15 @@ def main():
     parser.add_argument("--config", default="governance.yaml", help="Path to governance.yaml")
     parser.add_argument("--pr-number", default=None)
     parser.add_argument("--build-ref", default="")
+    parser.add_argument("--pr-body", default="", help="PR description text for attribution scan")
+    parser.add_argument("--pr-body-file", default=None, help="File containing PR description")
+    parser.add_argument("--base-branch", default="main", help="Base branch for git diff in attribution scan")
     args = parser.parse_args()
+
+    pr_body = args.pr_body
+    if args.pr_body_file and os.path.exists(args.pr_body_file):
+        with open(args.pr_body_file) as f:
+            pr_body = f.read()
 
     run(
         stage=args.stage,
@@ -187,6 +219,8 @@ def main():
         config_path=args.config,
         pr_number=args.pr_number,
         build_ref=args.build_ref,
+        pr_body=pr_body,
+        base_branch=args.base_branch,
     )
 
 

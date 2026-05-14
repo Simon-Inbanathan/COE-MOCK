@@ -42,6 +42,12 @@ jobs:
       - name: Validate governance.yaml
         run: python core/validators/config_validator.py governance.yaml
 
+      - name: Save PR body for attribution scanner
+        run: |
+          cat << 'PR_BODY_EOF' > /tmp/pr_body.txt
+          ${{ github.event.pull_request.body }}
+          PR_BODY_EOF
+
       - name: Run PR governance checks
         id: governance
         run: |
@@ -50,7 +56,9 @@ jobs:
             --paths src \
             --config governance.yaml \
             --pr-number ${{ github.event.pull_request.number }} \
-            --build-ref ${{ github.sha }}
+            --build-ref ${{ github.sha }} \
+            --pr-body-file /tmp/pr_body.txt \
+            --base-branch ${{ github.event.pull_request.base.ref }}
         continue-on-error: true
 
       - name: Post governance scorecard as PR comment
