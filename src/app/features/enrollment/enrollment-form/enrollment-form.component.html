@@ -1,0 +1,230 @@
+<!-- Success state -->
+<div *ngIf="enrolledRefId" class="card success-card">
+  <div class="success-icon">✓</div>
+  <h2>Enrollment Submitted</h2>
+  <p>The patient enrollment has been submitted successfully.</p>
+  <p class="ref-label">Reference ID:</p>
+  <p class="ref-id">{{ enrolledRefId }}</p>
+  <p class="ref-note">Save this reference ID for future lookups. No PHI is included in this identifier.</p>
+  <div class="actions">
+    <button class="btn btn-primary" (click)="goToList()">Back to Enrollment List</button>
+    <button class="btn btn-outline" (click)="enrolledRefId = null; currentStep = 'demographics'">Enroll Another Patient</button>
+  </div>
+</div>
+
+<!-- Form -->
+<div *ngIf="!enrolledRefId">
+  <div class="form-header">
+    <h1>Patient Enrollment</h1>
+    <p class="subtitle">Complete all three steps to enroll a new patient.</p>
+  </div>
+
+  <!-- Step indicator -->
+  <div class="steps">
+    <div *ngFor="let step of steps" class="step" [class]="stepStatus(step)">
+      {{ stepLabels[step] }}
+    </div>
+  </div>
+
+  <div class="card">
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate autocomplete="off">
+
+      <!-- ── Step 1: Demographics ────────────────────────────────── -->
+      <ng-container *ngIf="currentStep === 'demographics'" formGroupName="demographics">
+        <h2>Patient Demographics</h2>
+        <p class="step-note">All information is encrypted in transit and at rest.</p>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="firstName">First Name *</label>
+            <input id="firstName" type="text" formControlName="firstName" autocomplete="off">
+            <span class="field-error" *ngIf="fieldError('demographics','firstName')">
+              {{ fieldError('demographics','firstName') }}
+            </span>
+          </div>
+          <div class="form-group">
+            <label for="lastName">Last Name *</label>
+            <input id="lastName" type="text" formControlName="lastName" autocomplete="off">
+            <span class="field-error" *ngIf="fieldError('demographics','lastName')">
+              {{ fieldError('demographics','lastName') }}
+            </span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="dob">Date of Birth *</label>
+            <input id="dob" type="date" formControlName="dateOfBirth">
+            <span class="field-error" *ngIf="fieldError('demographics','dateOfBirth')">
+              {{ fieldError('demographics','dateOfBirth') }}
+            </span>
+          </div>
+          <div class="form-group">
+            <label for="gender">Gender *</label>
+            <select id="gender" formControlName="genderCode">
+              <option *ngFor="let opt of genderOptions" [value]="opt[0]">{{ opt[1] }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="phone">Primary Phone * <span class="hint">(555) 123-4567</span></label>
+            <input id="phone" type="tel" formControlName="primaryPhone" placeholder="(555) 123-4567">
+            <span class="field-error" *ngIf="fieldError('demographics','primaryPhone')">
+              {{ fieldError('demographics','primaryPhone') }}
+            </span>
+          </div>
+          <div class="form-group">
+            <label for="email">Email Address *</label>
+            <input id="email" type="email" formControlName="emailAddress" autocomplete="off">
+            <span class="field-error" *ngIf="fieldError('demographics','emailAddress')">
+              {{ fieldError('demographics','emailAddress') }}
+            </span>
+          </div>
+        </div>
+
+        <fieldset formGroupName="mailingAddress">
+          <legend>Mailing Address</legend>
+          <div class="form-group">
+            <label for="street1">Street Address *</label>
+            <input id="street1" type="text" formControlName="street1">
+            <span class="field-error" *ngIf="fieldError('demographics','mailingAddress.street1')">
+              {{ fieldError('demographics','mailingAddress.street1') }}
+            </span>
+          </div>
+          <div class="form-group">
+            <label for="street2">Apt / Suite / Unit</label>
+            <input id="street2" type="text" formControlName="street2">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="city">City *</label>
+              <input id="city" type="text" formControlName="city">
+              <span class="field-error" *ngIf="fieldError('demographics','mailingAddress.city')">
+                {{ fieldError('demographics','mailingAddress.city') }}
+              </span>
+            </div>
+            <div class="form-group form-group--sm">
+              <label for="state">State *</label>
+              <select id="state" formControlName="state">
+                <option value="">Select</option>
+                <option *ngFor="let s of usStates" [value]="s">{{ s }}</option>
+              </select>
+            </div>
+            <div class="form-group form-group--sm">
+              <label for="zip">ZIP Code *</label>
+              <input id="zip" type="text" formControlName="zipCode" placeholder="12345">
+              <span class="field-error" *ngIf="fieldError('demographics','mailingAddress.zipCode')">
+                {{ fieldError('demographics','mailingAddress.zipCode') }}
+              </span>
+            </div>
+          </div>
+        </fieldset>
+      </ng-container>
+
+      <!-- ── Step 2: Insurance Coverage ────────────────────────────── -->
+      <ng-container *ngIf="currentStep === 'coverage'" formGroupName="coverage">
+        <h2>Insurance Coverage</h2>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="payerId">Payer ID *</label>
+            <input id="payerId" type="text" formControlName="payerId">
+            <span class="field-error" *ngIf="fieldError('coverage','payerId')">
+              {{ fieldError('coverage','payerId') }}
+            </span>
+          </div>
+          <div class="form-group">
+            <label for="planName">Plan Name *</label>
+            <input id="planName" type="text" formControlName="planName">
+            <span class="field-error" *ngIf="fieldError('coverage','planName')">
+              {{ fieldError('coverage','planName') }}
+            </span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="groupNumber">Group Number *</label>
+          <input id="groupNumber" type="text" formControlName="groupNumber">
+          <span class="field-error" *ngIf="fieldError('coverage','groupNumber')">
+            {{ fieldError('coverage','groupNumber') }}
+          </span>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="effectiveDate">Effective Date *</label>
+            <input id="effectiveDate" type="date" formControlName="effectiveDate">
+            <span class="field-error" *ngIf="fieldError('coverage','effectiveDate')">
+              {{ fieldError('coverage','effectiveDate') }}
+            </span>
+          </div>
+          <div class="form-group">
+            <label for="terminationDate">Termination Date <span class="optional">(leave blank if active)</span></label>
+            <input id="terminationDate" type="date" formControlName="terminationDate">
+          </div>
+        </div>
+      </ng-container>
+
+      <!-- ── Step 3: Consent ────────────────────────────────────────── -->
+      <ng-container *ngIf="currentStep === 'consent'" formGroupName="consent">
+        <h2>Patient Consent</h2>
+        <p class="step-note">The following consents are required before enrollment can proceed.</p>
+
+        <div class="consent-item" [class.consent-error]="fieldError('consent','hipaaNoticeAcknowledged')">
+          <label class="consent-label">
+            <input type="checkbox" formControlName="hipaaNoticeAcknowledged">
+            <span>
+              <strong>HIPAA Notice of Privacy Practices *</strong><br>
+              I acknowledge that I have received and reviewed the Notice of Privacy Practices.
+            </span>
+          </label>
+          <span class="field-error" *ngIf="fieldError('consent','hipaaNoticeAcknowledged')">
+            {{ fieldError('consent','hipaaNoticeAcknowledged') }}
+          </span>
+        </div>
+
+        <div class="consent-item" [class.consent-error]="fieldError('consent','treatmentConsentGranted')">
+          <label class="consent-label">
+            <input type="checkbox" formControlName="treatmentConsentGranted">
+            <span>
+              <strong>Consent to Treatment *</strong><br>
+              I consent to the medical treatment and services provided by this organization.
+            </span>
+          </label>
+          <span class="field-error" *ngIf="fieldError('consent','treatmentConsentGranted')">
+            {{ fieldError('consent','treatmentConsentGranted') }}
+          </span>
+        </div>
+
+        <div class="consent-item">
+          <label class="consent-label">
+            <input type="checkbox" formControlName="electronicCommConsentGranted">
+            <span>
+              <strong>Electronic Communications</strong> <span class="optional">(optional)</span><br>
+              I consent to receiving appointment reminders and care summaries electronically.
+            </span>
+          </label>
+        </div>
+      </ng-container>
+
+      <!-- ── Navigation ────────────────────────────────────────────── -->
+      <div class="form-actions">
+        <button type="button" class="btn btn-outline" *ngIf="currentStepIndex > 0" (click)="back()">
+          Back
+        </button>
+        <button type="button" class="btn btn-primary" *ngIf="currentStepIndex < steps.length - 1" (click)="next()">
+          Continue
+        </button>
+        <button type="submit" class="btn btn-primary" *ngIf="currentStepIndex === steps.length - 1"
+                [disabled]="isSubmitting">
+          {{ isSubmitting ? 'Submitting...' : 'Submit Enrollment' }}
+        </button>
+      </div>
+
+      <div class="alert alert-danger" *ngIf="submitError">{{ submitError }}</div>
+
+    </form>
+  </div>
+</div>

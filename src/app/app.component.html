@@ -1,0 +1,24 @@
+<header class="app-header">
+  <div class="page-container header-inner">
+    <div class="brand">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect width="24" height="24" rx="6" fill="#1a56db"/>
+        <path d="M12 6v12M6 12h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <span>{{ appName }}</span>
+    </div>
+    <nav>
+      <a routerLink="/enrollment" routerLinkActive="active">Patient Enrollment</a>
+    </nav>
+  </div>
+</header>
+
+<main class="page-container main-content">
+  <router-outlet></router-outlet>
+</main>
+
+<footer class="app-footer">
+  <div class="page-container">
+    <span>{{ appName }} — For demonstration purposes only. Not for clinical use.</span>
+  </div>
+</footer>

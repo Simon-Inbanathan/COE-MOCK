@@ -1,0 +1,228 @@
+rules:
+
+  # ── PHI IN LOGGING ──────────────────────────────────────────────────────────
+
+  - id: hipaa-phi-in-logging
+    patterns:
+      - pattern-either:
+          - pattern: logging.$LEVEL(..., $PHI_VAR, ...)
+          - pattern: logger.$LEVEL(..., $PHI_VAR, ...)
+          - pattern: console.log(..., $PHI_VAR, ...)
+          - pattern: print(..., $PHI_VAR, ...)
+          - pattern: System.out.println(..., $PHI_VAR, ...)
+      - metavariable-regex:
+          metavariable: $PHI_VAR
+          regex: .*(patient|member|ssn|mrn|dob|npi|diagnosis|prescription|medication|phi|claim_id|subscriber|beneficiary).*
+    message: >
+      Possible PHI variable '$PHI_VAR' passed directly to a logging call.
+      Log the event type and a de-identified reference ID instead.
+    languages: [python, java, javascript, typescript, go, ruby, csharp]
+    severity: ERROR
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(b) — Audit controls"
+      fix: "Replace with a de-identified log entry, e.g. log event type + internal ID only."
+
+  # ── SQL / QUERY INJECTION RISK ON PHI TABLES ───────────────────────────────
+
+  - id: hipaa-sql-string-concat
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $QUERY = "..." + $VAR
+          - pattern: |
+              $QUERY = f"...{$VAR}..."
+          - pattern: |
+              $QUERY = "...%s..." % $VAR
+          - pattern: |
+              $QUERY = "..." + $VAR + "..."
+    message: >
+      String concatenation used to build a SQL/query string. This risks SQL injection
+      and can expose PHI. Use parameterized queries or an ORM.
+    languages: [python, java, javascript, typescript, csharp, ruby]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: "A03:2021 - Injection"
+      hipaa_rule: "164.312(a)(1) — Access control"
+
+  # ── UNENCRYPTED PHI FIELD STORAGE ──────────────────────────────────────────
+
+  - id: hipaa-unencrypted-phi-field
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $FIELD = Column(String(...), ...)
+          - pattern: |
+              $FIELD = models.CharField(...)
+          - pattern: |
+              $FIELD = models.TextField(...)
+      - metavariable-regex:
+          metavariable: $FIELD
+          regex: .*(ssn|social_security|mrn|medical_record|dob|birth_date|diagnosis|prescription|npi|member_id|subscriber_id|phi).*
+    message: >
+      PHI field '$FIELD' appears to be stored as plain text. PHI at rest must be
+      encrypted. Use an encrypted field type or apply column-level encryption.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(a)(2)(iv) — Encryption and decryption"
+
+  # ── MISSING AUTHORIZATION ON DATA ENDPOINTS ────────────────────────────────
+
+  - id: hipaa-unprotected-endpoint-python
+    patterns:
+      - pattern: |
+          @app.route($PATH, ...)
+          def $FUNC(...):
+              ...
+      - pattern-not: |
+          @app.route($PATH, ...)
+          @$AUTH_DECORATOR
+          def $FUNC(...):
+              ...
+      - metavariable-regex:
+          metavariable: $PATH
+          regex: .*(patient|member|claim|phi|medical|clinical|prescription|eligibility|prior.auth).*
+    message: >
+      Route '$PATH' handles clinical/PHI data but has no auth decorator.
+      All endpoints that return or accept PHI must require authentication and authorization.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(a)(1) — Access control"
+
+  - id: hipaa-unprotected-endpoint-java
+    patterns:
+      - pattern: |
+          @GetMapping($PATH)
+          public $RETURN $FUNC(...) { ... }
+      - pattern-not: |
+          @PreAuthorize(...)
+          @GetMapping($PATH)
+          public $RETURN $FUNC(...) { ... }
+      - metavariable-regex:
+          metavariable: $PATH
+          regex: .*(patient|member|claim|phi|medical|clinical|prescription|eligibility).*
+    message: >
+      Endpoint '$PATH' accesses clinical data but has no @PreAuthorize or security annotation.
+    languages: [java]
+    severity: ERROR
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(a)(1) — Access control"
+
+  # ── MISSING AUDIT LOGGING ON PHI ACCESS ────────────────────────────────────
+
+  - id: hipaa-missing-audit-log
+    patterns:
+      - pattern: |
+          def $FUNC($ARGS):
+              $DB.$QUERY(...)
+              return $RESULT
+      - pattern-not: |
+          def $FUNC($ARGS):
+              ...
+              audit_log(...)
+              ...
+      - metavariable-regex:
+          metavariable: $FUNC
+          regex: .*(get_patient|fetch_member|retrieve_claim|get_phi|get_medical|get_prescription|get_eligibility).*
+    message: >
+      Function '$FUNC' retrieves PHI but has no audit_log() call. HIPAA requires
+      audit trails for all PHI access. Add an audit log entry before returning data.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(b) — Audit controls"
+
+  # ── HARDCODED CREDENTIALS ──────────────────────────────────────────────────
+
+  - id: hipaa-hardcoded-password
+    patterns:
+      - pattern-either:
+          - pattern: password = "$PASS"
+          - pattern: passwd = "$PASS"
+          - pattern: secret = "$SECRET"
+          - pattern: api_key = "$KEY"
+          - pattern: db_password = "$PASS"
+    message: >
+      Hardcoded credential detected. Store secrets in environment variables or
+      a secrets manager (Vault, AWS Secrets Manager, Azure Key Vault).
+      Hardcoded credentials in healthcare systems violate access control requirements.
+    languages: [python, java, javascript, typescript, go, ruby, csharp]
+    severity: ERROR
+    metadata:
+      category: security
+      hipaa_rule: "164.312(d) — Person or entity authentication"
+
+  # ── INSECURE HTTP FOR PHI TRANSMISSION ────────────────────────────────────
+
+  - id: hipaa-insecure-http-phi
+    patterns:
+      - pattern-either:
+          - pattern: requests.get("http://...", ...)
+          - pattern: requests.post("http://...", ...)
+          - pattern: fetch("http://...", ...)
+          - pattern: axios.get("http://...", ...)
+          - pattern: axios.post("http://...", ...)
+          - pattern: HttpClient.$METHOD(new URI("http://..."), ...)
+    message: >
+      HTTP (not HTTPS) used for an external call. PHI in transit must be encrypted.
+      Use HTTPS for all external API calls in healthcare applications.
+    languages: [python, java, javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(e)(2)(ii) — Encryption in transit"
+
+  # ── PHI IN EXCEPTION MESSAGES ──────────────────────────────────────────────
+
+  - id: hipaa-phi-in-exception
+    patterns:
+      - pattern-either:
+          - pattern: raise Exception(f"...{$PHI_VAR}...")
+          - pattern: raise ValueError(f"...{$PHI_VAR}...")
+          - pattern: throw new Exception("..." + $PHI_VAR + "...")
+          - pattern: throw new RuntimeException("..." + $PHI_VAR + "...")
+      - metavariable-regex:
+          metavariable: $PHI_VAR
+          regex: .*(patient|member|ssn|mrn|dob|npi|diagnosis|claim|phi).*
+    message: >
+      PHI variable '$PHI_VAR' included in an exception message. Exception messages
+      often appear in logs and error responses. Use a generic message with an
+      internal reference ID instead.
+    languages: [python, java, javascript, typescript, csharp]
+    severity: ERROR
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(b) — Audit controls"
+
+  # ── FHIR / HL7 RESOURCE RETURNED WITHOUT AUTH CHECK ────────────────────────
+
+  - id: hipaa-fhir-no-auth
+    patterns:
+      - pattern-either:
+          - pattern: |
+              def $FUNC(...):
+                  return FHIRClient(...).$RESOURCE.read(...)
+          - pattern: |
+              def $FUNC(...):
+                  return client.get_fhir_resource(...)
+      - pattern-not: |
+          @requires_auth
+          def $FUNC(...): ...
+      - pattern-not: |
+          @login_required
+          def $FUNC(...): ...
+    message: >
+      FHIR resource returned without an authentication decorator. All FHIR
+      endpoints must enforce authentication per SMART on FHIR requirements.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: hipaa
+      hipaa_rule: "164.312(a)(1) — Access control"

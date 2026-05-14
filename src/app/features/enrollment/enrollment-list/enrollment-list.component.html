@@ -1,0 +1,54 @@
+<div class="list-header">
+  <div>
+    <h1>Patient Enrollments</h1>
+    <p class="subtitle" *ngIf="!isLoading">
+      {{ totalCount }} record{{ totalCount !== 1 ? 's' : '' }} — page {{ page }} of {{ totalPages || 1 }}
+    </p>
+  </div>
+  <div class="header-controls">
+    <select [value]="statusFilter" (change)="onStatusChange($any($event.target).value)">
+      <option *ngFor="let opt of statusOptions" [value]="opt.value">{{ opt.label }}</option>
+    </select>
+    <button class="btn btn-primary" (click)="newEnrollment()">+ New Enrollment</button>
+  </div>
+</div>
+
+<div class="alert alert-danger" *ngIf="loadError">{{ loadError }}</div>
+
+<div class="card table-card">
+  <div class="loading-overlay" *ngIf="isLoading">
+    <span>Loading...</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Reference ID</th>
+        <th>Status</th>
+        <th>Payer</th>
+        <th>Enrolled</th>
+        <th>Last Modified</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let enr of enrollments">
+        <td class="ref-id">{{ enr.referenceId }}</td>
+        <td><span class="badge" [class]="badgeClass(enr.enrollmentStatus)">{{ enr.enrollmentStatus }}</span></td>
+        <td>{{ enr.payerName }}</td>
+        <td>{{ enr.enrolledAt | date:'mediumDate' }}</td>
+        <td>{{ enr.lastModifiedAt | date:'mediumDate' }}</td>
+        <td><button class="btn btn-outline btn-sm" (click)="viewEnrollment(enr.referenceId)">View</button></td>
+      </tr>
+      <tr *ngIf="!isLoading && enrollments.length === 0">
+        <td colspan="6" class="empty-state">No enrollments found.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="pagination" *ngIf="totalPages > 1">
+    <button class="btn btn-outline btn-sm" [disabled]="page === 1" (click)="prevPage()">Previous</button>
+    <span>Page {{ page }} of {{ totalPages }}</span>
+    <button class="btn btn-outline btn-sm" [disabled]="page === totalPages" (click)="nextPage()">Next</button>
+  </div>
+</div>
