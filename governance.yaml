@@ -9,7 +9,7 @@ team:
     - "simonsezz10@gmail.com"
 
 baa:
-  verified: false
+  verified: true
   vendor: "anthropic"
   notes: "TODO: confirm BAA status before using AI tools with any PHI examples"
 

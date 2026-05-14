@@ -1,0 +1,64 @@
+<div class="contact-header">
+  <button class="btn btn-outline btn-sm" (click)="goBack()">&#8592; Back to Patient</button>
+  <h1>Contact Information</h1>
+</div>
+
+<div class="loading-state" *ngIf="isLoading">Loading contact information...</div>
+
+<div class="alert alert-danger" *ngIf="loadError">{{ loadError }}</div>
+
+<ng-container *ngIf="patient && !isLoading">
+  <div class="patient-name-bar card">
+    <div class="name-row">
+      <span class="patient-name">{{ patient.demographics.lastName }}, {{ patient.demographics.firstName }}</span>
+      <span class="ref-id">Ref: {{ patient.referenceId }}</span>
+    </div>
+  </div>
+
+  <div class="card contact-card">
+    <h2>Contact Details</h2>
+    <dl class="info-list">
+      <div class="info-row">
+        <dt>Phone</dt>
+        <dd>
+          <a class="contact-link" [href]="'tel:' + patient.demographics.primaryPhone">
+            {{ patient.demographics.primaryPhone }}
+          </a>
+        </dd>
+      </div>
+      <div class="info-row">
+        <dt>Email</dt>
+        <dd>
+          <a class="contact-link" [href]="'mailto:' + patient.demographics.emailAddress">
+            {{ patient.demographics.emailAddress }}
+          </a>
+        </dd>
+      </div>
+    </dl>
+
+    <h2 class="section-subheading">Mailing Address</h2>
+    <dl class="info-list">
+      <div class="info-row">
+        <dt>Street</dt>
+        <dd>
+          {{ patient.demographics.mailingAddress.street1 }}
+          <span *ngIf="patient.demographics.mailingAddress.street2" class="street2">
+            {{ patient.demographics.mailingAddress.street2 }}
+          </span>
+        </dd>
+      </div>
+      <div class="info-row">
+        <dt>City</dt>
+        <dd>{{ patient.demographics.mailingAddress.city }}</dd>
+      </div>
+      <div class="info-row">
+        <dt>State</dt>
+        <dd>{{ patient.demographics.mailingAddress.state }}</dd>
+      </div>
+      <div class="info-row">
+        <dt>ZIP Code</dt>
+        <dd>{{ patient.demographics.mailingAddress.zipCode }}</dd>
+      </div>
+    </dl>
+  </div>
+</ng-container>

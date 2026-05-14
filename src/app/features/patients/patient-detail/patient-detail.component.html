@@ -1,5 +1,6 @@
 <div class="detail-header">
   <button class="btn btn-outline btn-sm" (click)="goBack()">&#8592; Back to Patients</button>
+  <a class="btn btn-outline btn-sm" [routerLink]="['/patients', patient?.referenceId, 'contact']" *ngIf="patient">Contact Info</a>
 </div>
 
 <div class="loading-state" *ngIf="isLoading">Loading patient details...</div>
