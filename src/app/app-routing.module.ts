@@ -4,8 +4,13 @@ import { RouterModule, Routes } from '@angular/router';
 const routes: Routes = [
   {
     path: '',
-    redirectTo: 'enrollment',
+    redirectTo: 'patients',
     pathMatch: 'full',
+  },
+  {
+    path: 'patients',
+    loadChildren: () =>
+      import('./features/patients/patients.module').then(m => m.PatientsModule),
   },
   {
     path: 'enrollment',
@@ -14,7 +19,7 @@ const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: 'enrollment',
+    redirectTo: 'patients',
   },
 ];
 

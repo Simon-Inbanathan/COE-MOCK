@@ -57,6 +57,17 @@ export interface EnrollmentResponse {
   enrolledAt: string;
 }
 
+export interface PatientListItem {
+  referenceId: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  genderCode: GenderCode;
+  enrollmentStatus: EnrollmentStatus;
+  primaryPhone: string;
+  enrolledAt: string;
+}
+
 export interface EnrollmentListItem {
   referenceId: string;
   enrollmentStatus: EnrollmentStatus;

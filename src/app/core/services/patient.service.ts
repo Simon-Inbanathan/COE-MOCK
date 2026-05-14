@@ -8,6 +8,7 @@ import {
   EnrollmentResponse,
   PagedResponse,
   PatientEnrollment,
+  PatientListItem,
 } from '../models/patient.model';
 import { AuditLogService } from './audit-log.service';
 
@@ -55,6 +56,19 @@ export class PatientService {
     }
 
     return this.http.get<PagedResponse<EnrollmentListItem>>(this.baseUrl, { params });
+  }
+
+  listPatients(page = 1, pageSize = 20, search?: string): Observable<PagedResponse<PatientListItem>> {
+    const url = `${environment.apiBaseUrl}/patients`;
+    let params = new HttpParams()
+      .set('page', page.toString())
+      .set('pageSize', pageSize.toString());
+
+    if (search) {
+      params = params.set('search', search);
+    }
+
+    return this.http.get<PagedResponse<PatientListItem>>(url, { params });
   }
 
   updateStatus(referenceId: string, newStatus: string): Observable<EnrollmentResponse> {
