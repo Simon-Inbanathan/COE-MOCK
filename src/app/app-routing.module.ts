@@ -18,6 +18,11 @@ const routes: Routes = [
       import('./features/enrollment/enrollment.module').then(m => m.EnrollmentModule),
   },
   {
+    path: 'governance',
+    loadChildren: () =>
+      import('./features/governance/governance.module').then(m => m.GovernanceModule),
+  },
+  {
     path: '**',
     redirectTo: 'patients',
   },

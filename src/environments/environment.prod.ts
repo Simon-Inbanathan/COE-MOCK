@@ -3,4 +3,5 @@ export const environment = {
   apiBaseUrl: '/api/v1',
   appName: 'Mock EMR',
   version: '1.0.0',
+  anthropicApiKey: '',
 };

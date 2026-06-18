@@ -62,3 +62,52 @@ clinical_keywords:
     - eligibility
     - consent
     - hipaa
+
+security_attestation:
+  enabled: true
+  owasp_sast:
+    enabled: true
+  crypto_primitives:
+    enabled: true
+  llm_surface:
+    enabled: true
+  iac_scan:
+    enabled: true
+  sbom:
+    enabled: true
+    required: false
+  dast:
+    enabled: false
+  pentest_signoff_required: true
+
+attestation:
+  enabled: true
+
+  complexity:
+    enabled: true
+    max_cyclomatic: 10
+
+  sensitive_areas:
+    enabled: true
+
+  coverage:
+    enabled: false
+    min_line_coverage: 80
+    min_branch_coverage: 70
+    report_path: "coverage/lcov.info"
+
+  license:
+    enabled: false
+    approved:
+      - MIT
+      - Apache-2.0
+      - BSD-2-Clause
+      - BSD-3-Clause
+      - ISC
+    blocked:
+      - GPL-3.0
+      - AGPL-3.0
+      - LGPL-3.0
+
+  provenance:
+    require_model_version: false

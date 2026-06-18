@@ -79,6 +79,32 @@ class PHIPatterns:
 
 
 @dataclass
+class SecurityAttestationConfig:
+    enabled: bool = True
+    owasp_sast_enabled: bool = True
+    crypto_check_enabled: bool = True
+    llm_surface_check_enabled: bool = True
+    iac_scan_enabled: bool = True
+    sbom_required: bool = False          # advisory on PR; set True to block release
+    dast_enabled: bool = False           # DAST requires a running app URL
+    dast_target_url: str = ""
+    pentest_signoff_required: bool = True
+
+
+@dataclass
+class AttestationConfig:
+    enabled: bool = True
+    complexity_enabled: bool = True
+    max_cyclomatic: int = 10
+    sensitive_areas_enabled: bool = True
+    license_check_enabled: bool = False
+    approved_licenses: List[str] = field(default_factory=list)
+    blocked_licenses: List[str] = field(default_factory=list)
+    require_model_version: bool = False
+    require_prompt_hash: bool = False
+
+
+@dataclass
 class GovernanceConfig:
     team: TeamConfig
     baa: BAAConfig
@@ -88,6 +114,8 @@ class GovernanceConfig:
     thresholds: Thresholds
     phi_patterns: PHIPatterns
     clinical_keywords: List[str]
+    attestation: AttestationConfig = field(default_factory=AttestationConfig)
+    security_attestation: SecurityAttestationConfig = field(default_factory=SecurityAttestationConfig)
 
 
 def _require(d: dict, key: str, section: str) -> any:
@@ -175,6 +203,11 @@ def load_and_validate(config_path: str = "governance.yaml") -> GovernanceConfig:
     phi_raw = raw.get("phi_patterns", {})
     clinical_raw = raw.get("clinical_keywords", {})
 
+    att_raw = raw.get("attestation", {})
+    complexity_raw = att_raw.get("complexity", {})
+    license_raw = att_raw.get("license", {})
+    provenance_raw = att_raw.get("provenance", {})
+
     return GovernanceConfig(
         team=TeamConfig(
             name=team_name,
@@ -215,6 +248,33 @@ def load_and_validate(config_path: str = "governance.yaml") -> GovernanceConfig:
             exclude_paths=phi_raw.get("exclude_paths", []),
         ),
         clinical_keywords=clinical_raw.get("trigger_terms", []),
+        attestation=AttestationConfig(
+            enabled=att_raw.get("enabled", True),
+            complexity_enabled=complexity_raw.get("enabled", True),
+            max_cyclomatic=complexity_raw.get("max_cyclomatic", 10),
+            sensitive_areas_enabled=att_raw.get("sensitive_areas", {}).get("enabled", True),
+            license_check_enabled=license_raw.get("enabled", False),
+            approved_licenses=license_raw.get("approved", []),
+            blocked_licenses=license_raw.get("blocked", []),
+            require_model_version=provenance_raw.get("require_model_version", False),
+            require_prompt_hash=provenance_raw.get("require_prompt_hash", False),
+        ),
+        security_attestation=_parse_security_attestation(raw.get("security_attestation", {})),
+    )
+
+
+def _parse_security_attestation(sec_raw: dict) -> "SecurityAttestationConfig":
+    dast_raw = sec_raw.get("dast", {})
+    return SecurityAttestationConfig(
+        enabled=sec_raw.get("enabled", True),
+        owasp_sast_enabled=sec_raw.get("owasp_sast", {}).get("enabled", True),
+        crypto_check_enabled=sec_raw.get("crypto_primitives", {}).get("enabled", True),
+        llm_surface_check_enabled=sec_raw.get("llm_surface", {}).get("enabled", True),
+        iac_scan_enabled=sec_raw.get("iac_scan", {}).get("enabled", True),
+        sbom_required=sec_raw.get("sbom", {}).get("required", False),
+        dast_enabled=dast_raw.get("enabled", False),
+        dast_target_url=dast_raw.get("target_url", ""),
+        pentest_signoff_required=sec_raw.get("pentest_signoff_required", True),
     )
 
 

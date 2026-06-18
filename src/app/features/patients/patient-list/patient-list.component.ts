@@ -39,6 +39,7 @@ export class PatientListComponent implements OnInit {
           this.patients = response.items;
           this.totalCount = response.totalCount;
           this.isLoading = false;
+          console.log('Patients loaded:', response.items.map(p => `${p.firstName} ${p.lastName} DOB:${p.dateOfBirth}`));
         },
         error: () => {
           this.loadError = 'Failed to load patients. Please try again.';

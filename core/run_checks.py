@@ -22,6 +22,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.reporters.scorecard import build_scorecard, render_text, save_scorecard, send_escalation_email
 from core.reporters.ai_usage_log import append_entry as log_ai_usage
 from core.scanners.ai_attribution_scanner import build_report as build_attribution, render_text as render_attribution
+from core.scanners.attestation_scanner import (
+    render_json as render_attestation_json,
+    render_text as render_attestation_text,
+    render_vscode as render_attestation_vscode,
+    run_attestation,
+)
+from core.scanners.security_attestation_scanner import (
+    render_json as render_sec_json,
+    render_text as render_sec_text,
+    run_security_attestation,
+)
 from core.scanners.dependency_scanner import scan as dep_scan
 from core.scanners.phi_detector import scan_paths as phi_scan
 from core.scanners.sast_runner import run_full_scan as sast_scan
@@ -29,7 +40,8 @@ from core.validators.config_validator import ConfigValidationError, load_and_val
 
 
 def run(stage: str, paths: list, config_path: str, pr_number: str = None,
-        build_ref: str = "", pr_body: str = "", base_branch: str = "main"):
+        build_ref: str = "", pr_body: str = "", base_branch: str = "main",
+        commit_msg: str = "", output_format: str = "text"):
     # ── Load and validate config ──────────────────────────────────────────
     try:
         cfg = load_and_validate(config_path)
@@ -99,6 +111,45 @@ def run(stage: str, paths: list, config_path: str, pr_number: str = None,
         phi_findings = phi_scan(paths, cfg.phi_patterns.custom_identifiers, cfg.phi_patterns.exclude_paths)
         dep_findings = dep_scan(project_root, cfg.team.tech_stack)
 
+    # ── SECURITY ATTESTATION stage ───────────────────────────────────────
+    elif stage == "security-attestation":
+        print("Running Security Attestation Gate...")
+        sec_report = run_security_attestation(paths, cfg, project_root=project_root)
+        print(render_sec_text(sec_report))
+
+        os.makedirs(".governance/security-attestation", exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        sec_path = f".governance/security-attestation/sec_attestation_{ts}.json"
+        with open(sec_path, "w") as f:
+            f.write(render_sec_json(sec_report))
+        print(f"Security attestation saved: {sec_path}")
+
+        sys.exit(0 if sec_report.overall_passed else 1)
+
+    # ── IDE ATTESTATION stage ────────────────────────────────────────────
+    elif stage == "ide-attestation":
+        print("Running Code Generation Attestation Gate...")
+        att_report = run_attestation(paths, cfg, commit_msg=commit_msg, project_root=project_root)
+
+        if output_format == "vscode":
+            print(render_attestation_vscode(att_report))
+        elif output_format == "json":
+            print(render_attestation_json(att_report))
+        else:
+            print(render_attestation_text(att_report))
+
+        # Save attestation result to .governance/attestation/
+        os.makedirs(".governance/attestation", exist_ok=True)
+        from datetime import datetime, timezone
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        att_path = f".governance/attestation/attestation_{ts}.json"
+        with open(att_path, "w") as f:
+            f.write(render_attestation_json(att_report))
+        print(f"Attestation saved: {att_path}")
+
+        sys.exit(0 if att_report.overall_passed else 1)
+
     # ── AI Attribution (PR and pipeline stages) ──────────────────────────
     attribution_report = None
     if stage in ("pr", "pipeline"):
@@ -120,6 +171,14 @@ def run(stage: str, paths: list, config_path: str, pr_number: str = None,
         except Exception as e:
             print(f"  WARNING: AI attribution scan failed (non-blocking): {e}")
 
+    # ── Attestation gate (pr and pipeline) ───────────────────────────────
+    attestation_findings = []
+    if stage in ("pr", "pipeline") and cfg.attestation.enabled:
+        print("Running Code Generation Attestation Gate...")
+        att_report = run_attestation(paths, cfg, commit_msg=commit_msg, project_root=project_root)
+        attestation_findings = att_report.findings
+        print(render_attestation_text(att_report))
+
     # ── Build and output scorecard ────────────────────────────────────────
     card = build_scorecard(
         team_name=cfg.team.name,
@@ -134,6 +193,7 @@ def run(stage: str, paths: list, config_path: str, pr_number: str = None,
         dep_findings=dep_findings,
         pr_number=pr_number,
         build_ref=build_ref,
+        attestation_findings=attestation_findings,
     )
 
     print(render_text(card))
@@ -198,7 +258,8 @@ def _check_clinical_triggers(paths: list, keywords: list, reviewers: list):
 
 def main():
     parser = argparse.ArgumentParser(description="Healthcare AI Governance — run scan checks")
-    parser.add_argument("--stage", required=True, choices=["pre-commit", "pr", "pipeline"])
+    parser.add_argument("--stage", required=True,
+                        choices=["pre-commit", "pr", "pipeline", "ide-attestation", "security-attestation"])
     parser.add_argument("--paths", nargs="+", required=True, help="Files or directories to scan")
     parser.add_argument("--config", default="governance.yaml", help="Path to governance.yaml")
     parser.add_argument("--pr-number", default=None)
@@ -206,6 +267,9 @@ def main():
     parser.add_argument("--pr-body", default="", help="PR description text for attribution scan")
     parser.add_argument("--pr-body-file", default=None, help="File containing PR description")
     parser.add_argument("--base-branch", default="main", help="Base branch for git diff in attribution scan")
+    parser.add_argument("--commit-msg", default="", help="Commit message for provenance check (ide-attestation stage)")
+    parser.add_argument("--output-format", choices=["text", "json", "vscode"], default="text",
+                        help="Output format (text | json | vscode problem matcher)")
     args = parser.parse_args()
 
     pr_body = args.pr_body
@@ -221,6 +285,8 @@ def main():
         build_ref=args.build_ref,
         pr_body=pr_body,
         base_branch=args.base_branch,
+        commit_msg=args.commit_msg,
+        output_format=args.output_format,
     )
 
 

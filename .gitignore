@@ -18,8 +18,9 @@ __pycache__/
 .venv/
 venv/
 
-# Governance scorecards — contain finding details, do not commit
+# Governance output — scorecards and attestation logs
 .governance/scorecards/
+.governance/attestation/
 
 # Secrets baseline (contains hashes of known secrets to baseline)
 # Commit this file after running: detect-secrets scan > .secrets.baseline

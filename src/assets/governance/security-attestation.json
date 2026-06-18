@@ -1,0 +1,75 @@
+{
+  "findings": [
+    {
+      "gate": "owasp_sast",
+      "severity": "high",
+      "file": "src/app/core/interceptors/auth.interceptor.ts",
+      "line": 11,
+      "rule_id": "owasp.A02-cryptographic-failures",
+      "message": "Auth token in localStorage is accessible to any JavaScript on the page — XSS leads to full session takeover",
+      "cwe": "CWE-312: Cleartext Storage of Sensitive Information",
+      "owasp_category": "A02:2021 - Cryptographic Failures",
+      "detail": "localStorage persists across browser sessions and is readable by all same-origin scripts. A single XSS payload drains the token silently.",
+      "requires_pentest_signoff": false,
+      "remediation": "Revert to sessionStorage.getItem('access_token'). sessionStorage is cleared when the tab closes and is not accessible to inline scripts injected via XSS in other tabs."
+    },
+    {
+      "gate": "llm_surface",
+      "severity": "high",
+      "file": "src/app/core/services/ai-suggest.service.ts",
+      "line": 1,
+      "rule_id": "sec-llm-surface-detected",
+      "message": "LLM library import detected (@anthropic-ai/sdk) — prompt injection assessment required",
+      "cwe": "CWE-20: Improper Input Validation",
+      "owasp_category": "A03:2021 - Injection",
+      "detail": "File imports an AI/LLM SDK. Review all user-input paths for prompt injection. Any clinical data passed to the model must be sanitised and must not include raw PHI.",
+      "requires_pentest_signoff": true,
+      "remediation": "1. Review all user inputs that flow into LLM prompts.\n2. Sanitize/validate inputs before including in prompts.\n3. Use system message separation — never merge user content into system prompt.\n4. Apply output validation — do not use raw LLM output in SQL/HTML without encoding.\n5. Schedule adversarial prompt testing as part of pen-test scope."
+    },
+    {
+      "gate": "llm_surface",
+      "severity": "critical",
+      "file": "src/app/core/services/ai-suggest.service.ts",
+      "line": 17,
+      "rule_id": "sec-prompt-injection-direct",
+      "message": "User-controlled input (clinicalNotes) directly concatenated into LLM call — critical prompt injection risk",
+      "cwe": "CWE-20: Improper Input Validation",
+      "owasp_category": "A03:2021 - Injection",
+      "detail": "Line 17 appends raw clinicalNotes into the message content. An attacker who controls this field can override the system prompt, extract other patients' data, or exfiltrate the API key.",
+      "requires_pentest_signoff": true,
+      "remediation": "Sanitize user input before passing to LLM. Use structured message format with clear user/system separation. Never interpolate raw user text into the prompt string."
+    },
+    {
+      "gate": "owasp_sast",
+      "severity": "medium",
+      "file": "src/app/core/services/ai-suggest.service.ts",
+      "line": 8,
+      "rule_id": "owasp.A07-hardcoded-apikey",
+      "message": "API key sourced from environment object — verify it is not present in environment.ts committed to source control",
+      "cwe": "CWE-798: Use of Hard-coded Credentials",
+      "owasp_category": "A07:2021 - Identification and Authentication Failures",
+      "detail": "environment.anthropicApiKey must not be set to a real key value in any committed environment file. Use CI secrets injection only.",
+      "requires_pentest_signoff": false,
+      "remediation": "Ensure environment.ts has anthropicApiKey: '' and the real value is injected at deploy time via CI secret (ANTHROPIC_API_KEY env var)."
+    },
+    {
+      "gate": "sbom",
+      "severity": "medium",
+      "file": ".",
+      "line": 0,
+      "rule_id": "sec-sbom-missing",
+      "message": "No SBOM artifact found in repository",
+      "cwe": "",
+      "owasp_category": "",
+      "detail": "A signed Software Bill of Materials (SBOM) must be generated for every release artifact to support supply chain security and HIPAA audit requirements.",
+      "requires_pentest_signoff": false,
+      "remediation": "Add to CI: syft . -o cyclonedx-json > sbom.cdx.json\nOr: npx @cyclonedx/cyclonedx-npm --output-file sbom.cdx.json\nSign with: cosign attest --predicate sbom.cdx.json <artifact>"
+    }
+  ],
+  "sbom_generated": false,
+  "sbom_path": "",
+  "iac_scanned": false,
+  "llm_surfaces_found": 1,
+  "pentest_required": true,
+  "overall_passed": false
+}
