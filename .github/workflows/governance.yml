@@ -1,0 +1,328 @@
+name: Healthcare AI Governance
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master, develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # JOB 1 — PR Governance Gate
+  # ══════════════════════════════════════════════════════════════════════════
+  pr-governance-gate:
+    name: PR Governance Gate
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install Python governance dependencies
+        run: pip install pyyaml semgrep detect-secrets lizard
+
+      - name: Install Node dependencies (for npm audit)
+        run: npm install --package-lock-only 2>/dev/null || true
+
+      - name: Validate governance.yaml
+        run: python core/validators/config_validator.py governance.yaml
+
+      - name: Save PR body for attribution scanner
+        run: echo "${{ github.event.pull_request.body }}" > /tmp/pr_body.txt
+
+      - name: Create governance output directories
+        run: mkdir -p .governance/scorecards .governance/security-attestation .governance/attestation
+
+      - name: Run PR governance checks
+        id: governance
+        run: |
+          python core/run_checks.py \
+            --stage pr \
+            --paths src \
+            --config governance.yaml \
+            --pr-number ${{ github.event.pull_request.number }} \
+            --build-ref ${{ github.sha }} \
+            --pr-body-file /tmp/pr_body.txt \
+            --base-branch ${{ github.event.pull_request.base.ref }}
+        continue-on-error: true
+
+      - name: Ensure scorecard exists (fallback on Python crash)
+        if: always()
+        run: |
+          if [ -z "$(ls -A .governance/scorecards/ 2>/dev/null)" ]; then
+            echo "Governance scan did not complete — check the step log above for the Python traceback." \
+              > .governance/scorecards/scan_incomplete_$(date +%Y%m%d_%H%M%S).txt
+          fi
+
+      - name: Post governance scorecard as PR comment
+        uses: actions/github-script@v9
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            let body = '## Healthcare AI Governance\n\n';
+            const scorecardDir = '.governance/scorecards';
+            if (fs.existsSync(scorecardDir)) {
+              const files = fs.readdirSync(scorecardDir).filter(f => f.endsWith('.txt')).sort();
+              if (files.length > 0) {
+                const content = fs.readFileSync(path.join(scorecardDir, files[files.length - 1]), 'utf8');
+                body += '```\n' + content + '\n```';
+              }
+            }
+            if (body === '## Healthcare AI Governance\n\n') {
+              const outcome = '${{ steps.governance.outcome }}';
+              body += outcome === 'success' ? 'All governance checks passed.' : 'Governance checks failed — see Actions log.';
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
+
+      - name: Upload governance scorecard artifact
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: governance-scorecard-pr-${{ github.event.pull_request.number }}
+          path: .governance/scorecards/
+          retention-days: 90
+          if-no-files-found: warn
+
+      - name: Fail if governance checks did not pass
+        if: steps.governance.outcome == 'failure'
+        run: |
+          echo "::error::Governance checks failed. Resolve all CRITICAL findings before merging."
+          exit 1
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # JOB 2 — Security Attestation Gate
+  # Dedicated security gate for AI-generated code. Runs after PR gate.
+  # Covers: OWASP SAST, crypto primitives, XSS/injection, LLM surface
+  # detection (prompt injection), IaC scan, and SBOM generation.
+  # ══════════════════════════════════════════════════════════════════════════
+  security-attestation-gate:
+    name: Security Attestation Gate
+    if: github.event_name == 'pull_request'
+    needs: pr-governance-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # ── SBOM Generation ────────────────────────────────────────────────────
+      - name: Generate SBOM (Syft / CycloneDX)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+        continue-on-error: true
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sbom-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+          path: sbom.cdx.json
+          retention-days: 365
+          if-no-files-found: warn
+
+      # ── IaC Security Scan ──────────────────────────────────────────────────
+      - name: IaC Security Scan (Checkov)
+        uses: bridgecrewio/checkov-action@master
+        with:
+          directory: .
+          quiet: true
+          soft_fail: true
+          framework: terraform,cloudformation,kubernetes,dockerfile,github_actions
+          output_format: json
+          output_file_path: .governance/security-attestation/checkov-results.json
+        continue-on-error: true
+
+      # ── Python Security Attestation ────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install security scan dependencies
+        run: pip install pyyaml semgrep lizard checkov
+
+      - name: Create security attestation output directory
+        run: mkdir -p .governance/security-attestation
+
+      - name: Run Security Attestation Gate
+        id: security_attestation
+        run: |
+          python core/run_checks.py \
+            --stage security-attestation \
+            --paths src \
+            --config governance.yaml \
+            --build-ref ${{ github.sha }}
+        continue-on-error: true
+
+      # ── DAST Baseline (optional — uncomment when staging URL is available) ──
+      # - name: OWASP ZAP Baseline Scan
+      #   uses: zaproxy/action-baseline@v0.12.0
+      #   with:
+      #     target: ${{ secrets.DAST_TARGET_URL }}
+      #   continue-on-error: true
+
+      - name: Post security attestation results as PR comment
+        uses: actions/github-script@v9
+        if: always()
+        with:
+          script: |
+            const fs = require('fs');
+            const secDir = '.governance/security-attestation';
+            let body = '## Security Attestation Gate\n\n';
+            if (fs.existsSync(secDir)) {
+              const files = fs.readdirSync(secDir).filter(f => f.startsWith('sec_attestation_') && f.endsWith('.json')).sort();
+              if (files.length > 0) {
+                const latest = files[files.length - 1];
+                const data = JSON.parse(fs.readFileSync(`${secDir}/${latest}`, 'utf8'));
+                const findings = data.findings || [];
+                const critical = findings.filter(f => f.severity === 'critical').length;
+                const high = findings.filter(f => f.severity === 'high').length;
+                const status = data.overall_passed ? '**PASSED**' : '**FAILED**';
+                body += `${status} — Critical: ${critical}  High: ${high}\n\n`;
+                if (data.llm_surfaces_found > 0) {
+                  body += `> **${data.llm_surfaces_found} LLM surface(s)** detected — prompt injection assessment required\n\n`;
+                }
+                if (data.pentest_required) {
+                  body += `> **Pen-test sign-off required** for AI/LLM features in this PR\n\n`;
+                }
+                body += `| Detail | |\n|--------|---|\n`;
+                body += `| SBOM | ${data.sbom_generated ? 'Generated' : 'Not found (advisory)'} |\n`;
+                body += `| IaC scanned | ${data.iac_scanned ? 'Yes' : 'No (no IaC files)'} |\n`;
+                const gates = {};
+                for (const f of findings) {
+                  gates[f.gate] = gates[f.gate] || { c: 0, h: 0, m: 0 };
+                  if (f.severity === 'critical') gates[f.gate].c++;
+                  else if (f.severity === 'high') gates[f.gate].h++;
+                  else gates[f.gate].m++;
+                }
+                if (Object.keys(gates).length > 0) {
+                  body += '\n**Findings by gate:**\n\n| Gate | C | H | M |\n|------|---|---|---|\n';
+                  for (const [gate, c] of Object.entries(gates)) {
+                    body += `| ${gate} | ${c.c} | ${c.h} | ${c.m} |\n`;
+                  }
+                }
+              }
+            }
+            if (body === '## Security Attestation Gate\n\n') {
+              const outcome = '${{ steps.security_attestation.outcome }}';
+              body += outcome === 'success' ? 'All security gates passed.' : 'Security scan failed — see Actions log.';
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
+
+      - name: Fail if security attestation failed
+        if: steps.security_attestation.outcome == 'failure'
+        run: |
+          echo "::error::Security attestation gate failed. Resolve critical/high findings before merging."
+          exit 1
+
+      - name: Upload security attestation artifact
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: security-attestation-pr-${{ github.event.pull_request.number }}
+          path: .governance/security-attestation/
+          retention-days: 90
+          if-no-files-found: warn
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # JOB 3 — Pipeline Governance Gate (post-merge)
+  # ══════════════════════════════════════════════════════════════════════════
+  pipeline-governance-gate:
+    name: Pipeline Governance Gate
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Install governance dependencies
+        run: pip install pyyaml semgrep detect-secrets lizard checkov
+
+      - name: Install Node dependencies
+        run: npm install --package-lock-only 2>/dev/null || true
+
+      - name: Validate governance.yaml
+        run: python core/validators/config_validator.py governance.yaml
+
+      - name: Create governance output directories
+        run: mkdir -p .governance/scorecards .governance/security-attestation
+
+      - name: Run pipeline governance checks
+        run: |
+          python core/run_checks.py \
+            --stage pipeline \
+            --paths src \
+            --config governance.yaml \
+            --build-ref ${{ github.sha }}
+
+      - name: Generate release SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+        continue-on-error: true
+
+      - name: Run Security Attestation Gate (pipeline)
+        run: |
+          python core/run_checks.py \
+            --stage security-attestation \
+            --paths src \
+            --config governance.yaml \
+            --build-ref ${{ github.sha }}
+
+      - name: Upload pipeline artifacts
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: governance-pipeline-${{ github.sha }}
+          path: |
+            .governance/scorecards/
+            .governance/security-attestation/
+            sbom.cdx.json
+          retention-days: 365
+          if-no-files-found: warn

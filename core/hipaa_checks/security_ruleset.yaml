@@ -1,0 +1,311 @@
+rules:
+
+  # ── WEAK / BROKEN HASH ALGORITHMS ─────────────────────────────────────────
+  # MD5 and SHA-1 are cryptographically broken — forbidden for tokens, passwords,
+  # or identity verification. Content-hash context (cache busting, ETags) is OK.
+
+  - id: sec-weak-hash-md5
+    pattern-either:
+      - pattern: hashlib.md5(...)
+      - pattern: MD5.getInstance(...)
+      - pattern: MessageDigest.getInstance("MD5")
+      - pattern: crypto.createHash("md5")
+      - pattern: CryptoJS.MD5(...)
+    message: >
+      MD5 is cryptographically broken. For security use (tokens, signatures,
+      integrity checks) use SHA-256 or SHA-3.
+      For non-security content hashing this may be acceptable; add a comment.
+    languages: [python, java, javascript, typescript, go]
+    severity: ERROR
+    metadata:
+      category: cryptography
+      cwe: "CWE-327: Use of a Broken or Risky Cryptographic Algorithm"
+      owasp: "A02:2021 - Cryptographic Failures"
+      fix: "Replace with hashlib.sha256() / SHA256.getInstance() / crypto.createHash('sha256')"
+
+  - id: sec-weak-hash-sha1
+    pattern-either:
+      - pattern: hashlib.sha1(...)
+      - pattern: SHA1.getInstance(...)
+      - pattern: MessageDigest.getInstance("SHA-1")
+      - pattern: crypto.createHash("sha1")
+    message: >
+      SHA-1 is cryptographically broken. Use SHA-256 or SHA-3 for all
+      security-sensitive operations (digital signatures, HMAC, tokens).
+    languages: [python, java, javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: cryptography
+      cwe: "CWE-327"
+      owasp: "A02:2021 - Cryptographic Failures"
+
+  # ── CUSTOM CRYPTO IMPLEMENTATIONS ─────────────────────────────────────────
+  # AI tools sometimes generate crypto code from scratch. Always use approved
+  # stdlib or vetted libraries instead.
+
+  - id: sec-no-custom-cipher
+    patterns:
+      - pattern: |
+          class $NAME(...):
+              ...
+              def encrypt($SELF, ...):
+                  ...
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: .*(Cipher|Crypt|Encrypt|AES|DES|XOR|Obfuscat).*
+    message: >
+      Custom cryptographic class '$NAME' detected. AI-generated crypto is high-risk.
+      Use vetted standard library primitives: cryptography.hazmat (Python),
+      javax.crypto (Java), or Node.js built-in crypto.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: cryptography
+      cwe: "CWE-327"
+      owasp: "A02:2021 - Cryptographic Failures"
+      fix: "Replace custom cipher with an approved library implementation."
+
+  - id: sec-no-custom-xor-cipher
+    pattern-either:
+      - pattern: |
+          $RESULT = bytes([a ^ b for a, b in zip($DATA, $KEY)])
+      - pattern: |
+          $RESULT = [ord($C) ^ ord($K) for $C, $K in zip($MSG, $KEY)]
+    message: >
+      XOR cipher detected. XOR is not a secure encryption algorithm.
+      Use AES-GCM or ChaCha20-Poly1305 for authenticated encryption.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: cryptography
+      cwe: "CWE-327"
+
+  # ── MATH.RANDOM() FOR SECURITY ────────────────────────────────────────────
+
+  - id: sec-math-random-token
+    patterns:
+      - pattern: Math.random()
+      - pattern-inside: |
+          $TOKEN = ...
+      - metavariable-regex:
+          metavariable: $TOKEN
+          regex: .*(token|session|secret|key|nonce|csrf|auth|password|otp|code).*
+    message: >
+      Math.random() is NOT cryptographically secure and must not be used to generate
+      tokens, session IDs, secrets, or nonces. Use crypto.randomBytes() (Node.js)
+      or crypto.getRandomValues() (browser).
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: cryptography
+      cwe: "CWE-338: Use of Cryptographically Weak Pseudo-Random Number Generator"
+      owasp: "A02:2021 - Cryptographic Failures"
+
+  # ── XSS — UNSAFE DOM MANIPULATION ────────────────────────────────────────
+
+  - id: sec-xss-innerhtml
+    pattern-either:
+      - pattern: $EL.innerHTML = $VAR
+      - pattern: $EL.outerHTML = $VAR
+      - pattern: document.write($VAR)
+      - pattern: document.writeln($VAR)
+    message: >
+      Assigning to innerHTML/outerHTML or calling document.write() with a variable
+      can introduce Cross-Site Scripting (XSS). Use textContent for plain text,
+      or DOMPurify.sanitize() before inserting HTML.
+    languages: [javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-79: Cross-site Scripting"
+      owasp: "A03:2021 - Injection"
+      fix: "Use element.textContent = value; or DOMPurify.sanitize(html) before innerHTML."
+
+  - id: sec-xss-dangerously-set-html
+    pattern: <$COMP dangerouslySetInnerHTML={{ __html: $VAR }} />
+    message: >
+      dangerouslySetInnerHTML used with a variable. Ensure the value is sanitized
+      with DOMPurify or an equivalent library before rendering.
+    languages: [javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-79"
+      owasp: "A03:2021 - Injection"
+
+  # ── EVAL / CODE INJECTION ─────────────────────────────────────────────────
+
+  - id: sec-eval-user-input
+    pattern-either:
+      - pattern: eval($VAR)
+      - pattern: exec($VAR)
+      - pattern: new Function($VAR)
+      - pattern: __import__($VAR)
+    message: >
+      eval()/exec()/Function() called with a variable. If this variable contains
+      user-controlled input, it is a critical code injection vulnerability.
+      Avoid eval() entirely; use safe alternatives (JSON.parse, ast.literal_eval).
+    languages: [python, javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code"
+      owasp: "A03:2021 - Injection"
+
+  # ── PROMPT INJECTION RISK (LLM FEATURES) ─────────────────────────────────
+
+  - id: sec-prompt-injection-concat
+    patterns:
+      - pattern-either:
+          - pattern: |
+              $CLIENT.chat.completions.create(messages=[..., {"content": $USER + ...}, ...], ...)
+          - pattern: |
+              $CLIENT.chat.completions.create(messages=[..., {"content": f"...{$USER}..."}, ...], ...)
+          - pattern: |
+              $CLIENT.messages.create(messages=[..., {"content": $USER + ...}, ...], ...)
+      - metavariable-regex:
+          metavariable: $USER
+          regex: .*(user_input|request\.|req\.|body\.|query\.|params\.|input|prompt_from|user_message|user_text).*
+    message: >
+      User-controlled input directly concatenated into LLM prompt. This is a
+      prompt injection vulnerability — a malicious user can override system
+      instructions or extract sensitive context. Sanitize or validate input
+      before including in prompts; use a structured message format.
+    languages: [python, javascript, typescript]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-20: Improper Input Validation"
+      owasp: "A03:2021 - Injection"
+      fix: "Validate/sanitize user input, use system message separation, and apply content filtering."
+
+  - id: sec-llm-without-auth
+    patterns:
+      - pattern: |
+          @app.route($PATH, ...)
+          def $FUNC(...):
+              ...
+              $CLIENT.chat.completions.create(...)
+              ...
+      - pattern-not: |
+          @$AUTH_DECORATOR
+          @app.route($PATH, ...)
+          def $FUNC(...): ...
+    message: >
+      LLM inference endpoint '$PATH' has no authentication decorator.
+      AI model inference endpoints must be behind an authenticated API gateway.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: "A07:2021 - Identification and Authentication Failures"
+      fix: "Add @login_required, @requires_auth, or equivalent before the route."
+
+  # ── INFRASTRUCTURE AS CODE ────────────────────────────────────────────────
+
+  - id: sec-iac-hardcoded-secret-terraform
+    patterns:
+      - pattern: |
+          variable "$NAME" {
+            default = "$VALUE"
+            ...
+          }
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: .*(password|secret|token|key|credential|api_key|access_key|private_key).*
+      - metavariable-regex:
+          metavariable: $VALUE
+          regex: ^.{4,}$
+    message: >
+      Terraform variable '$NAME' has a hardcoded default value that appears to be a
+      credential. Secrets must not have defaults; use a secrets manager reference
+      (AWS Secrets Manager, Vault) and mark the variable as sensitive = true.
+    languages: [hcl]
+    severity: ERROR
+    metadata:
+      category: iac
+      cwe: "CWE-798: Use of Hard-coded Credentials"
+      owasp: "A02:2021 - Cryptographic Failures"
+
+  - id: sec-iac-missing-sensitive-flag
+    patterns:
+      - pattern: |
+          variable "$NAME" {
+            ...
+          }
+      - pattern-not: |
+          variable "$NAME" {
+            ...
+            sensitive = true
+            ...
+          }
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: .*(password|secret|token|key|credential|api_key).*
+    message: >
+      Terraform variable '$NAME' looks like a credential but is missing
+      'sensitive = true'. Mark credential variables as sensitive to prevent
+      them appearing in plan output.
+    languages: [hcl]
+    severity: WARNING
+    metadata:
+      category: iac
+      fix: "Add 'sensitive = true' to the variable block."
+
+  # ── OPEN REDIRECT ─────────────────────────────────────────────────────────
+
+  - id: sec-open-redirect
+    pattern-either:
+      - pattern: redirect($VAR)
+      - pattern: return redirect($REQUEST.$PARAM)
+      - pattern: res.redirect($REQ.$BODY)
+      - pattern: response.redirect($REQ.$QUERY)
+    message: >
+      Potential open redirect: redirect target is user-controlled.
+      Validate that the redirect destination is in an approved allowlist.
+    languages: [python, javascript, typescript]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: "CWE-601: URL Redirection to Untrusted Site"
+      owasp: "A01:2021 - Broken Access Control"
+
+  # ── INSECURE DESERIALIZATION ──────────────────────────────────────────────
+
+  - id: sec-insecure-deserialization
+    pattern-either:
+      - pattern: pickle.loads($DATA)
+      - pattern: pickle.load($FILE)
+      - pattern: yaml.load($DATA)
+      - pattern: yaml.load($FILE)
+    message: >
+      Insecure deserialization detected. pickle.loads() and yaml.load() with
+      untrusted data can execute arbitrary code. Use yaml.safe_load() for YAML;
+      avoid pickle for user-supplied data entirely.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: "CWE-502: Deserialization of Untrusted Data"
+      owasp: "A08:2021 - Software and Data Integrity Failures"
+      fix: "Use yaml.safe_load() for YAML. For binary serialisation use JSON or protobuf."
+
+  # ── SUPPLY CHAIN — DEPENDENCY PINNING ────────────────────────────────────
+
+  - id: sec-unpinned-docker-base
+    patterns:
+      - pattern: FROM $IMAGE
+      - pattern-not: FROM $IMAGE@sha256:...
+      - pattern-not: FROM $IMAGE:$TAG@sha256:...
+      - metavariable-regex:
+          metavariable: $IMAGE
+          regex: ^(node|python|java|ubuntu|debian|alpine|nginx)$
+    message: >
+      Docker base image '$IMAGE' is not pinned to a specific digest.
+      Unpinned base images can introduce supply chain attacks.
+      Use 'FROM image:tag@sha256:digest' for reproducible builds.
+    languages: [dockerfile]
+    severity: WARNING
+    metadata:
+      category: supply_chain
+      owasp: "A06:2021 - Vulnerable and Outdated Components"

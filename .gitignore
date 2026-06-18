@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+
+# Angular cache
+.angular/
+
+# Python cache (governance framework)
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Governance output — scorecards and attestation logs
+.governance/scorecards/
+.governance/attestation/
+
+# Secrets baseline (contains hashes of known secrets to baseline)
+# Commit this file after running: detect-secrets scan > .secrets.baseline
+# .secrets.baseline   ← uncomment to exclude; recommended to commit for tracking
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+/coverage

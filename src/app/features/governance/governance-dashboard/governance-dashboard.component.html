@@ -1,0 +1,233 @@
+<ng-container *ngIf="vm$ | async as vm; else loading">
+
+  <!-- ── Page header ─────────────────────────────────────────────────── -->
+  <div class="dash-header">
+    <div>
+      <h1>Governance Dashboard</h1>
+      <p class="dash-subtitle">
+        Real-time view of every gate that runs on this branch before code reaches production.
+      </p>
+    </div>
+    <div class="dash-meta" *ngIf="vm.scorecard">
+      <span class="meta-label">Build</span>
+      <code class="meta-value">{{ vm.scorecard.build_ref }}</code>
+      <span class="meta-label">PR</span>
+      <code class="meta-value">#{{ vm.scorecard.pr_number ?? 'local' }}</code>
+      <span class="meta-label">Checked</span>
+      <span class="meta-value">{{ vm.scorecard.timestamp | date:'MMM d, y, HH:mm' }} UTC</span>
+    </div>
+  </div>
+
+  <!-- ── Gate overview cards ─────────────────────────────────────────── -->
+  <section class="section">
+    <h2 class="section-title">Gate Status</h2>
+    <div class="gate-grid">
+
+      <!-- BAA card -->
+      <div class="gate-card" [class.gate-pass]="vm.scorecard?.baa_verified" [class.gate-fail]="!vm.scorecard?.baa_verified">
+        <div class="gate-card-top">
+          <span class="gate-name">BAA Verified</span>
+          <span class="badge" [class.badge-success]="vm.scorecard?.baa_verified" [class.badge-danger]="!vm.scorecard?.baa_verified">
+            {{ vm.scorecard?.baa_verified ? 'VERIFIED' : 'MISSING' }}
+          </span>
+        </div>
+        <p class="gate-desc">Business Associate Agreement with AI vendor ({{ vm.scorecard?.platform ?? '—' }})</p>
+      </div>
+
+      <!-- Dynamic gate cards -->
+      <div
+        *ngFor="let gate of vm.gates"
+        class="gate-card"
+        [class.gate-pass]="gate.passed"
+        [class.gate-fail]="!gate.passed"
+      >
+        <div class="gate-card-top">
+          <span class="gate-name">{{ gate.name }}</span>
+          <span class="badge" [class.badge-success]="gate.passed" [class.badge-danger]="!gate.passed">
+            {{ gate.passed ? 'PASS' : 'FAIL' }}
+          </span>
+        </div>
+        <p class="gate-desc">{{ gate.description }}</p>
+        <div class="sev-row" *ngIf="gate.critical + gate.high + gate.medium + gate.low > 0">
+          <span *ngIf="gate.critical" class="sev-chip sev-critical">C:{{ gate.critical }}</span>
+          <span *ngIf="gate.high"     class="sev-chip sev-high">H:{{ gate.high }}</span>
+          <span *ngIf="gate.medium"   class="sev-chip sev-medium">M:{{ gate.medium }}</span>
+          <span *ngIf="gate.low"      class="sev-chip sev-low">L:{{ gate.low }}</span>
+        </div>
+        <div class="sev-row" *ngIf="gate.critical + gate.high + gate.medium + gate.low === 0">
+          <span class="clean-label">No findings</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── PR Gate scan breakdown ──────────────────────────────────────── -->
+  <section class="section" *ngIf="vm.scorecard">
+    <h2 class="section-title">PR Gate — Scan Results</h2>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Scanner</th>
+            <th>Status</th>
+            <th class="col-num">Critical</th>
+            <th class="col-num">High</th>
+            <th class="col-num">Medium</th>
+            <th class="col-num">Low</th>
+            <th class="col-num">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let scan of vm.scorecard.scans">
+            <td class="scanner-name">{{ scannerLabel(scan.scanner) }}</td>
+            <td>
+              <span class="badge" [class.badge-success]="scan.passed" [class.badge-danger]="!scan.passed">
+                {{ scan.passed ? 'PASS' : 'FAIL' }}
+              </span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="scan.critical" class="sev-chip sev-critical">{{ scan.critical }}</span>
+              <span *ngIf="!scan.critical" class="muted">—</span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="scan.high" class="sev-chip sev-high">{{ scan.high }}</span>
+              <span *ngIf="!scan.high" class="muted">—</span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="scan.medium" class="sev-chip sev-medium">{{ scan.medium }}</span>
+              <span *ngIf="!scan.medium" class="muted">—</span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="scan.low" class="sev-chip sev-low">{{ scan.low }}</span>
+              <span *ngIf="!scan.low" class="muted">—</span>
+            </td>
+            <td class="col-num">{{ scan.finding_count }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Inline findings per scanner -->
+      <ng-container *ngFor="let scan of vm.scorecard.scans">
+        <div *ngIf="scan.findings.length" class="scan-findings">
+          <p class="findings-sub-header">{{ scannerLabel(scan.scanner) }} findings</p>
+          <div *ngFor="let f of scan.findings" class="finding-row">
+            <span class="sev-chip" [class]="severityClass(f.severity)">{{ f.severity | uppercase }}</span>
+            <span class="finding-file">{{ shortPath(f.file) }}:{{ f.line }}</span>
+            <span class="finding-msg">{{ f.message }}</span>
+            <span *ngIf="f.category" class="finding-cat">{{ f.category }}</span>
+            <span *ngIf="f.cve" class="finding-cat">{{ f.cve }}</span>
+          </div>
+        </div>
+      </ng-container>
+    </div>
+  </section>
+
+  <!-- ── Security Attestation gate breakdown ─────────────────────────── -->
+  <section class="section" *ngIf="vm.security">
+    <h2 class="section-title">Security Attestation Gate — Gate Breakdown</h2>
+    <div class="card">
+
+      <!-- Gate overview table -->
+      <table>
+        <thead>
+          <tr>
+            <th>Gate</th>
+            <th>Status</th>
+            <th class="col-num">C</th>
+            <th class="col-num">H</th>
+            <th class="col-num">M</th>
+            <th class="col-num">L</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let row of vm.securityGates">
+            <td>{{ gateLabel(row.gate) }}</td>
+            <td>
+              <span class="badge" [class.badge-success]="row.passed" [class.badge-danger]="!row.passed">
+                {{ row.passed ? 'PASS' : 'FAIL' }}
+              </span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="row.critical" class="sev-chip sev-critical">{{ row.critical }}</span>
+              <span *ngIf="!row.critical" class="muted">—</span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="row.high" class="sev-chip sev-high">{{ row.high }}</span>
+              <span *ngIf="!row.high" class="muted">—</span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="row.medium" class="sev-chip sev-medium">{{ row.medium }}</span>
+              <span *ngIf="!row.medium" class="muted">—</span>
+            </td>
+            <td class="col-num">
+              <span *ngIf="row.low" class="sev-chip sev-low">{{ row.low }}</span>
+              <span *ngIf="!row.low" class="muted">—</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Metadata strip -->
+      <div class="sec-meta">
+        <span class="meta-pill" [class.meta-pill-ok]="vm.security.sbom_generated" [class.meta-pill-warn]="!vm.security.sbom_generated">
+          SBOM: {{ vm.security.sbom_generated ? 'Generated' : 'Not found — advisory' }}
+        </span>
+        <span class="meta-pill" [class.meta-pill-ok]="vm.security.iac_scanned" [class.meta-pill-warn]="!vm.security.iac_scanned">
+          IaC: {{ vm.security.iac_scanned ? 'Scanned' : 'No IaC files' }}
+        </span>
+        <span class="meta-pill" [class.meta-pill-warn]="vm.security.llm_surfaces_found > 0" [class.meta-pill-ok]="vm.security.llm_surfaces_found === 0">
+          LLM surfaces: {{ vm.security.llm_surfaces_found }}
+        </span>
+        <span class="meta-pill" [class.meta-pill-warn]="vm.security.pentest_required" [class.meta-pill-ok]="!vm.security.pentest_required">
+          Pen-test: {{ vm.security.pentest_required ? 'Required' : 'Not required' }}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Security findings detail ────────────────────────────────────── -->
+  <section class="section" *ngIf="vm.allFindings.length">
+    <h2 class="section-title">Security Findings Detail</h2>
+    <div class="card findings-list">
+      <div
+        *ngFor="let f of vm.allFindings; let i = index"
+        class="finding-detail"
+        [class.finding-detail-expanded]="expandedFindingIndex === i"
+      >
+        <button class="finding-detail-header" (click)="toggleFinding(i)">
+          <span class="sev-chip" [class]="severityClass(f.severity)">{{ f.severity | uppercase }}</span>
+          <span class="finding-gate-tag">{{ gateLabel(f.gate) }}</span>
+          <span class="finding-file">{{ shortPath(f.file) }}<ng-container *ngIf="f.line">:{{ f.line }}</ng-container></span>
+          <span class="finding-msg-preview">{{ f.message }}</span>
+          <span class="expand-icon">{{ expandedFindingIndex === i ? '▲' : '▼' }}</span>
+        </button>
+        <div class="finding-detail-body" *ngIf="expandedFindingIndex === i">
+          <dl class="finding-dl">
+            <dt>Rule</dt>      <dd><code>{{ f.rule_id }}</code></dd>
+            <dt>File</dt>      <dd>{{ f.file }}<ng-container *ngIf="f.line"> line {{ f.line }}</ng-container></dd>
+            <ng-container *ngIf="f.cwe"><dt>CWE</dt><dd>{{ f.cwe }}</dd></ng-container>
+            <ng-container *ngIf="f.owasp_category"><dt>OWASP</dt><dd>{{ f.owasp_category }}</dd></ng-container>
+            <ng-container *ngIf="f.detail"><dt>Detail</dt><dd>{{ f.detail }}</dd></ng-container>
+            <ng-container *ngIf="f.remediation"><dt>Remediation</dt><dd class="remediation">{{ f.remediation }}</dd></ng-container>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Block reason banner ─────────────────────────────────────────── -->
+  <div class="alert alert-danger" *ngIf="vm.scorecard?.block_reason">
+    <strong>BLOCKED:</strong> {{ vm.scorecard?.block_reason }}
+  </div>
+
+  <!-- ── Escalation notice ───────────────────────────────────────────── -->
+  <div class="alert alert-info" *ngIf="vm.scorecard?.escalated_to?.length">
+    Findings escalated to: {{ vm.scorecard?.escalated_to?.join(', ') }}
+  </div>
+
+</ng-container>
+
+<ng-template #loading>
+  <div class="loading-state">Loading governance data…</div>
+</ng-template>

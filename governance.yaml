@@ -1,0 +1,113 @@
+team:
+  name: "COE Mock EMR Team"
+  platform: github
+  architect: "simonsezz10@gmail.com"
+  tech_lead: "simonsezz10@gmail.com"
+  tech_stack:
+    - node
+  clinical_reviewers:
+    - "simonsezz10@gmail.com"
+
+baa:
+  verified: true
+  vendor: "anthropic"
+  notes: "TODO: confirm BAA status before using AI tools with any PHI examples"
+
+checks:
+  pre_commit:
+    phi_detection: true
+    secrets_scan: true
+    sast: true
+  pr_gate:
+    sast: true
+    dependency_scan: true
+    hipaa_checks: true
+    clinical_review_required: true
+    post_results_as_comment: true
+  pipeline_gate:
+    compliance_scorecard: true
+    block_on_open_criticals: true
+
+thresholds:
+  block_on_severity: critical
+  escalate_on_severity: high
+  max_allowed_highs: 0
+
+phi_patterns:
+  custom_identifiers:
+    - patient_id
+    - member_id
+    - subscriber_id
+    - policy_number
+    - mrn
+    - referenceId
+  exclude_paths:
+    - "node_modules/**"
+    - "dist/**"
+    - "*.lock"
+    - "**/*.spec.ts"
+
+clinical_keywords:
+  trigger_terms:
+    - enrollment
+    - diagnosis
+    - prescription
+    - medication
+    - clinical
+    - fhir
+    - hl7
+    - icd
+    - cpt
+    - prior_auth
+    - eligibility
+    - consent
+    - hipaa
+
+security_attestation:
+  enabled: true
+  owasp_sast:
+    enabled: true
+  crypto_primitives:
+    enabled: true
+  llm_surface:
+    enabled: true
+  iac_scan:
+    enabled: true
+  sbom:
+    enabled: true
+    required: false
+  dast:
+    enabled: false
+  pentest_signoff_required: true
+
+attestation:
+  enabled: true
+
+  complexity:
+    enabled: true
+    max_cyclomatic: 10
+
+  sensitive_areas:
+    enabled: true
+
+  coverage:
+    enabled: false
+    min_line_coverage: 80
+    min_branch_coverage: 70
+    report_path: "coverage/lcov.info"
+
+  license:
+    enabled: false
+    approved:
+      - MIT
+      - Apache-2.0
+      - BSD-2-Clause
+      - BSD-3-Clause
+      - ISC
+    blocked:
+      - GPL-3.0
+      - AGPL-3.0
+      - LGPL-3.0
+
+  provenance:
+    require_model_version: false

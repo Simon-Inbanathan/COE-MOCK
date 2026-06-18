@@ -1,0 +1,94 @@
+.contact-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.loading-state {
+  text-align: center;
+  padding: 60px 0;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.patient-name-bar {
+  margin-bottom: 20px;
+}
+
+.name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.patient-name {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.ref-id {
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.contact-card {
+  max-width: 560px;
+
+  h2 {
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+.section-subheading {
+  margin-top: 28px;
+}
+
+.info-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--color-border);
+
+  &:last-child { border-bottom: none; }
+
+  dt {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    font-weight: 500;
+  }
+
+  dd {
+    font-size: 14px;
+    text-align: right;
+  }
+}
+
+.contact-link {
+  color: var(--color-primary);
+  text-decoration: none;
+
+  &:hover {
+    color: var(--color-primary-dk);
+    text-decoration: underline;
+  }
+}
+
+.street2 {
+  display: block;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}

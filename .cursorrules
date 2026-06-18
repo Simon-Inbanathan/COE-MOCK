@@ -1,0 +1,57 @@
+# Mock EMR — Cursor Rules (Healthcare AI Governance)
+
+## ROLE
+You are an AI coding assistant on a HIPAA-regulated Angular EMR project.
+The governance framework runs automated checks on every PR — your code must pass them.
+
+## ABSOLUTE RULES
+
+1. NEVER use real PHI in code, tests, or comments.
+   Synthetic format: patient_id="SYNTHETIC-P-00001", dob="1900-01-01", ssn="000-00-0001"
+
+2. NEVER use console.log() with patient data. Log eventType + referenceId only:
+   console.log({ eventType: 'PATIENT_VIEW', resourceId: record.referenceId })
+
+3. NEVER hardcode API URLs. Always use environment.apiBaseUrl.
+
+4. NEVER use localStorage for auth tokens — use sessionStorage via AuthInterceptor.
+
+5. NEVER use type `any` — import the correct interface from core/models/.
+
+## REQUIRED — ALWAYS GENERATE THESE
+
+- AuditLogService.log() call for every service method that reads/writes patient data
+- FormBuilder validators on every PHI input field (required, pattern, maxLength)
+- Error messages that are generic — never echo back PHI values
+- Observable return types on service methods, never raw Promise
+
+## ANGULAR PATTERNS FOR THIS PROJECT
+
+Service call pattern:
+```typescript
+return this.http.post<ResponseType>(url, payload).pipe(
+  tap(res => this.auditLog.log({ eventType: 'EVENT', resourceType: 'Type', resourceId: res.referenceId }))
+);
+```
+
+Form group pattern (always Reactive, never Template-driven):
+```typescript
+this.fb.group({
+  fieldName: ['', [Validators.required, Validators.maxLength(100)]],
+})
+```
+
+Synthetic test data:
+```typescript
+const mockEnrollment: PatientEnrollment = {
+  referenceId: 'SYNTHETIC-P-00001',
+  demographics: {
+    firstName: 'Test', lastName: 'Patient',
+    dateOfBirth: '1900-01-01', genderCode: 'U',
+    primaryPhone: '(555) 000-0001',
+    emailAddress: 'test.patient@example.invalid',
+    mailingAddress: { street1: '123 Test St', city: 'Testville', state: 'TX', zipCode: '00000' }
+  },
+  ...
+};
+```

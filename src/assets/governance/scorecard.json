@@ -1,0 +1,101 @@
+{
+  "team_name": "COE Mock EMR Team",
+  "platform": "github",
+  "stage": "pr",
+  "timestamp": "2026-06-18T15:11:44.000000+00:00",
+  "build_ref": "Test2-dirty",
+  "pr_number": "6",
+  "overall_passed": false,
+  "baa_verified": true,
+  "scans": [
+    {
+      "scanner": "phi_detector",
+      "passed": false,
+      "finding_count": 1,
+      "critical": 1,
+      "high": 0,
+      "medium": 0,
+      "low": 0,
+      "findings": [
+        {
+          "rule_id": "hipaa.phi-in-console-log",
+          "severity": "critical",
+          "file": "src/app/features/patients/patient-list/patient-list.component.ts",
+          "line": 43,
+          "message": "PHI values (firstName, lastName, dateOfBirth) passed directly to console.log() — HIPAA-164.312(b) violation",
+          "category": "HIPAA-164.312(b)"
+        }
+      ]
+    },
+    {
+      "scanner": "sast",
+      "passed": false,
+      "finding_count": 4,
+      "critical": 0,
+      "high": 1,
+      "medium": 2,
+      "low": 1,
+      "findings": [
+        {
+          "rule_id": "hipaa.token-in-localstorage",
+          "severity": "high",
+          "file": "src/app/core/interceptors/auth.interceptor.ts",
+          "line": 11,
+          "message": "Auth token stored in localStorage — must use sessionStorage to prevent XSS token theft (HIPAA-164.312(d))",
+          "category": "HIPAA-164.312(d)"
+        },
+        {
+          "rule_id": "hipaa.llm-phi-input",
+          "severity": "high",
+          "file": "src/app/core/services/ai-suggest.service.ts",
+          "line": 17,
+          "message": "User-supplied clinical notes concatenated directly into LLM prompt — prompt injection and PHI exfiltration risk",
+          "category": "HIPAA-164.312(a)(2)(iv)"
+        },
+        {
+          "rule_id": "hipaa.audit-log-completeness",
+          "severity": "medium",
+          "file": "src/app/features/patients/patient-contact/patient-contact.component.ts",
+          "line": 45,
+          "message": "PHI contact field updated — verify AuditLogService.log() is called on every save path",
+          "category": "HIPAA-164.312(b)"
+        },
+        {
+          "rule_id": "hipaa.localstorage-check",
+          "severity": "low",
+          "file": "src/app/core/interceptors/auth.interceptor.ts",
+          "line": 11,
+          "message": "Auth token storage detected — confirm sessionStorage is used, not localStorage",
+          "category": "HIPAA-164.312(d)"
+        }
+      ]
+    },
+    {
+      "scanner": "dependency_scan",
+      "passed": true,
+      "finding_count": 2,
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 2,
+      "findings": [
+        {
+          "package": "zone.js",
+          "installed_version": "0.14.3",
+          "severity": "low",
+          "cve": "GHSA-4q5x-r987-zone",
+          "summary": "zone.js 0.14.3 has a minor issue with async error propagation — upgrade to 0.14.10"
+        },
+        {
+          "package": "tslib",
+          "installed_version": "2.3.0",
+          "severity": "low",
+          "cve": "GHSA-tslib-2300-info",
+          "summary": "tslib 2.3.0 — newer version available with improved tree-shaking (advisory only)"
+        }
+      ]
+    }
+  ],
+  "escalated_to": ["simonsezz10@gmail.com"],
+  "block_reason": "Blocking findings in: phi_detector, sast"
+}

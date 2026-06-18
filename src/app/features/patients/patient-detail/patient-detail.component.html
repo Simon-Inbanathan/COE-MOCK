@@ -1,0 +1,133 @@
+<div class="detail-header">
+  <button class="btn btn-outline btn-sm" (click)="goBack()">&#8592; Back to Patients</button>
+  <a class="btn btn-outline btn-sm" [routerLink]="['/patients', patient?.referenceId, 'contact']" *ngIf="patient">Contact Info</a>
+</div>
+
+<div class="loading-state" *ngIf="isLoading">Loading patient details...</div>
+
+<div class="alert alert-danger" *ngIf="loadError">{{ loadError }}</div>
+
+<ng-container *ngIf="patient && !isLoading">
+  <div class="patient-header card">
+    <div class="patient-title">
+      <h1>{{ patient.demographics.lastName }}, {{ patient.demographics.firstName }}</h1>
+      <span class="badge"
+        [class.badge-success]="patient.enrollmentStatus === 'ACTIVE'"
+        [class.badge-warning]="patient.enrollmentStatus === 'PENDING'"
+        [class.badge-info]="patient.enrollmentStatus === 'DRAFT'"
+        [class.badge-danger]="patient.enrollmentStatus === 'INACTIVE'">
+        {{ patient.enrollmentStatus }}
+      </span>
+    </div>
+    <p class="ref-id">Ref: {{ patient.referenceId }}</p>
+  </div>
+
+  <div class="detail-grid">
+    <section class="card">
+      <h2>Demographics</h2>
+      <dl class="info-list">
+        <div class="info-row">
+          <dt>Date of Birth</dt>
+          <dd>{{ patient.demographics.dateOfBirth | date:'mediumDate' }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Gender</dt>
+          <dd>{{ genderDisplay[patient.demographics.genderCode] }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Phone</dt>
+          <dd>{{ patient.demographics.primaryPhone }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Email</dt>
+          <dd>{{ patient.demographics.emailAddress }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Address</dt>
+          <dd>{{ formatAddress() }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Insurance Coverage</h2>
+      <dl class="info-list">
+        <div class="info-row">
+          <dt>Plan Name</dt>
+          <dd>{{ patient.primaryCoverage.planName }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Payer ID</dt>
+          <dd>{{ patient.primaryCoverage.payerId }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Group Number</dt>
+          <dd>{{ patient.primaryCoverage.groupNumber }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Effective Date</dt>
+          <dd>{{ patient.primaryCoverage.effectiveDate | date:'mediumDate' }}</dd>
+        </div>
+        <div class="info-row" *ngIf="patient.primaryCoverage.terminationDate">
+          <dt>Termination Date</dt>
+          <dd>{{ patient.primaryCoverage.terminationDate | date:'mediumDate' }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="card" *ngIf="patient.primaryProvider">
+      <h2>Primary Provider</h2>
+      <dl class="info-list">
+        <div class="info-row">
+          <dt>Provider Name</dt>
+          <dd>{{ patient.primaryProvider.providerName }}</dd>
+        </div>
+        <div class="info-row">
+          <dt>Facility Code</dt>
+          <dd>{{ patient.primaryProvider.facilityCode }}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>Consent</h2>
+      <dl class="info-list">
+        <div class="info-row">
+          <dt>HIPAA Notice</dt>
+          <dd>
+            <span class="badge" [class.badge-success]="patient.consent.hipaaNoticeAcknowledged" [class.badge-danger]="!patient.consent.hipaaNoticeAcknowledged">
+              {{ patient.consent.hipaaNoticeAcknowledged ? 'Acknowledged' : 'Not Acknowledged' }}
+            </span>
+          </dd>
+        </div>
+        <div class="info-row">
+          <dt>Treatment Consent</dt>
+          <dd>
+            <span class="badge" [class.badge-success]="patient.consent.treatmentConsentGranted" [class.badge-danger]="!patient.consent.treatmentConsentGranted">
+              {{ patient.consent.treatmentConsentGranted ? 'Granted' : 'Not Granted' }}
+            </span>
+          </dd>
+        </div>
+        <div class="info-row">
+          <dt>Electronic Communications</dt>
+          <dd>
+            <span class="badge" [class.badge-success]="patient.consent.electronicCommConsentGranted" [class.badge-danger]="!patient.consent.electronicCommConsentGranted">
+              {{ patient.consent.electronicCommConsentGranted ? 'Granted' : 'Not Granted' }}
+            </span>
+          </dd>
+        </div>
+        <div class="info-row" *ngIf="patient.consent.acknowledgedAt">
+          <dt>Acknowledged At</dt>
+          <dd>{{ patient.consent.acknowledgedAt | date:'medium' }}</dd>
+        </div>
+      </dl>
+    </section>
+  </div>
+
+  <div class="card meta-section">
+    <div class="meta-row">
+      <span *ngIf="patient.enrolledAt">Enrolled: {{ patient.enrolledAt | date:'medium' }}</span>
+      <span *ngIf="patient.lastModifiedAt">Last Modified: {{ patient.lastModifiedAt | date:'medium' }}</span>
+    </div>
+  </div>
+</ng-container>
