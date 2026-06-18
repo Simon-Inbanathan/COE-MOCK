@@ -64,6 +64,14 @@ jobs:
             --base-branch ${{ github.event.pull_request.base.ref }}
         continue-on-error: true
 
+      - name: Ensure scorecard exists (fallback on Python crash)
+        if: always()
+        run: |
+          if [ -z "$(ls -A .governance/scorecards/ 2>/dev/null)" ]; then
+            echo "Governance scan did not complete — check the step log above for the Python traceback." \
+              > .governance/scorecards/scan_incomplete_$(date +%Y%m%d_%H%M%S).txt
+          fi
+
       - name: Post governance scorecard as PR comment
         uses: actions/github-script@v9
         if: always()

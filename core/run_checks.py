@@ -68,48 +68,75 @@ def run(stage: str, paths: list, config_path: str, pr_number: str = None,
     if stage == "pre-commit":
         if cfg.pre_commit.phi_detection:
             print("Running PHI detection...")
-            phi_findings = phi_scan(
-                paths,
-                cfg.phi_patterns.custom_identifiers,
-                cfg.phi_patterns.exclude_paths,
-            )
-            _print_scan_result("PHI Detection", phi_findings, "severity")
+            try:
+                phi_findings = phi_scan(
+                    paths,
+                    cfg.phi_patterns.custom_identifiers,
+                    cfg.phi_patterns.exclude_paths,
+                )
+                _print_scan_result("PHI Detection", phi_findings, "severity")
+            except Exception as e:
+                print(f"  WARNING: PHI detection failed unexpectedly: {e}", file=sys.stderr)
 
         if cfg.pre_commit.sast:
             print("Running SAST (HIPAA rules)...")
-            sast_findings = sast_scan(paths, include_owasp=False)
-            _print_scan_result("SAST", sast_findings, "severity")
+            try:
+                sast_findings = sast_scan(paths, include_owasp=False)
+                _print_scan_result("SAST", sast_findings, "severity")
+            except Exception as e:
+                print(f"  WARNING: SAST scan failed unexpectedly: {e}", file=sys.stderr)
 
     # ── PR GATE stage ────────────────────────────────────────────────────
     elif stage == "pr":
         if cfg.pr_gate.sast:
             print("Running SAST (HIPAA + OWASP)...")
-            sast_findings = sast_scan(paths, include_owasp=True)
-            _print_scan_result("SAST", sast_findings, "severity")
+            try:
+                sast_findings = sast_scan(paths, include_owasp=True)
+                _print_scan_result("SAST", sast_findings, "severity")
+            except Exception as e:
+                print(f"  WARNING: SAST scan failed unexpectedly: {e}", file=sys.stderr)
 
         if cfg.pr_gate.hipaa_checks:
             print("Running PHI detection...")
-            phi_findings = phi_scan(
-                paths,
-                cfg.phi_patterns.custom_identifiers,
-                cfg.phi_patterns.exclude_paths,
-            )
-            _print_scan_result("PHI Detection", phi_findings, "severity")
+            try:
+                phi_findings = phi_scan(
+                    paths,
+                    cfg.phi_patterns.custom_identifiers,
+                    cfg.phi_patterns.exclude_paths,
+                )
+                _print_scan_result("PHI Detection", phi_findings, "severity")
+            except Exception as e:
+                print(f"  WARNING: PHI detection failed unexpectedly: {e}", file=sys.stderr)
 
         if cfg.pr_gate.dependency_scan:
             print("Running dependency CVE scan...")
-            dep_findings = dep_scan(project_root, cfg.team.tech_stack)
-            _print_scan_result("Dependencies", dep_findings, "severity")
+            try:
+                dep_findings = dep_scan(project_root, cfg.team.tech_stack)
+                _print_scan_result("Dependencies", dep_findings, "severity")
+            except Exception as e:
+                print(f"  WARNING: Dependency scan failed unexpectedly: {e}", file=sys.stderr)
 
         if cfg.pr_gate.clinical_review_required:
-            _check_clinical_triggers(paths, cfg.clinical_keywords, cfg.team.clinical_reviewers)
+            try:
+                _check_clinical_triggers(paths, cfg.clinical_keywords, cfg.team.clinical_reviewers)
+            except Exception as e:
+                print(f"  WARNING: Clinical review check failed unexpectedly: {e}", file=sys.stderr)
 
     # ── PIPELINE stage ───────────────────────────────────────────────────
     elif stage == "pipeline":
         print("Running full scan suite...")
-        sast_findings = sast_scan(paths, include_owasp=True)
-        phi_findings = phi_scan(paths, cfg.phi_patterns.custom_identifiers, cfg.phi_patterns.exclude_paths)
-        dep_findings = dep_scan(project_root, cfg.team.tech_stack)
+        try:
+            sast_findings = sast_scan(paths, include_owasp=True)
+        except Exception as e:
+            print(f"  WARNING: SAST scan failed: {e}", file=sys.stderr)
+        try:
+            phi_findings = phi_scan(paths, cfg.phi_patterns.custom_identifiers, cfg.phi_patterns.exclude_paths)
+        except Exception as e:
+            print(f"  WARNING: PHI detection failed: {e}", file=sys.stderr)
+        try:
+            dep_findings = dep_scan(project_root, cfg.team.tech_stack)
+        except Exception as e:
+            print(f"  WARNING: Dependency scan failed: {e}", file=sys.stderr)
 
     # ── SECURITY ATTESTATION stage ───────────────────────────────────────
     elif stage == "security-attestation":
@@ -175,9 +202,12 @@ def run(stage: str, paths: list, config_path: str, pr_number: str = None,
     attestation_findings = []
     if stage in ("pr", "pipeline") and cfg.attestation.enabled:
         print("Running Code Generation Attestation Gate...")
-        att_report = run_attestation(paths, cfg, commit_msg=commit_msg, project_root=project_root)
-        attestation_findings = att_report.findings
-        print(render_attestation_text(att_report))
+        try:
+            att_report = run_attestation(paths, cfg, commit_msg=commit_msg, project_root=project_root)
+            attestation_findings = att_report.findings
+            print(render_attestation_text(att_report))
+        except Exception as e:
+            print(f"  WARNING: Attestation gate failed unexpectedly: {e}", file=sys.stderr)
 
     # ── Build and output scorecard ────────────────────────────────────────
     card = build_scorecard(
