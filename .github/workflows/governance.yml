@@ -34,7 +34,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install Python governance dependencies
         run: pip install pyyaml semgrep detect-secrets lizard
@@ -95,6 +95,7 @@ jobs:
           name: governance-scorecard-pr-${{ github.event.pull_request.number }}
           path: .governance/scorecards/
           retention-days: 90
+          if-no-files-found: warn
 
       - name: Fail if governance checks did not pass
         if: steps.governance.outcome == 'failure'
@@ -135,6 +136,7 @@ jobs:
           name: sbom-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
           path: sbom.cdx.json
           retention-days: 365
+          if-no-files-found: warn
 
       # ── IaC Security Scan ──────────────────────────────────────────────────
       - name: IaC Security Scan (Checkov)
@@ -237,6 +239,7 @@ jobs:
           name: security-attestation-pr-${{ github.event.pull_request.number }}
           path: .governance/security-attestation/
           retention-days: 90
+          if-no-files-found: warn
 
   # ══════════════════════════════════════════════════════════════════════════
   # JOB 3 — Pipeline Governance Gate (post-merge)
@@ -257,7 +260,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
 
       - name: Install governance dependencies
         run: pip install pyyaml semgrep detect-secrets lizard checkov
@@ -302,3 +305,4 @@ jobs:
             .governance/security-attestation/
             sbom.cdx.json
           retention-days: 365
+          if-no-files-found: warn

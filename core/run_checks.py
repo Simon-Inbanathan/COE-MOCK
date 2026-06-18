@@ -198,7 +198,7 @@ def run(stage: str, paths: list, config_path: str, pr_number: str = None,
 
     print(render_text(card))
 
-    if stage == "pipeline" and cfg.pipeline_gate.compliance_scorecard:
+    if stage == "pr" or (stage == "pipeline" and cfg.pipeline_gate.compliance_scorecard):
         save_scorecard(card)
 
     send_escalation_email(card)
